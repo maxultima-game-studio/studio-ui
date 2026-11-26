@@ -151,6 +151,11 @@ export async function loadGameDesign(slug: string): Promise<GameDesignBundle> {
     ? await fs.readFile(pitchPath, "utf8")
     : "";
 
+  const storyPlanPath = path.join(designDir, "story-plan.md");
+  const story_plan = (await exists(storyPlanPath))
+    ? await fs.readFile(storyPlanPath, "utf8")
+    : "";
+
   const rawWorld = await readYamlFile(path.join(designDir, "world.yaml"), {});
   const world = WorldBibleSchema.parse(rawWorld);
 
@@ -177,6 +182,7 @@ export async function loadGameDesign(slug: string): Promise<GameDesignBundle> {
     slug,
     game,
     pitch,
+    story_plan,
     world,
     flags,
     characters,
@@ -202,6 +208,16 @@ export async function savePitch(slug: string, pitch: string): Promise<void> {
   const pitchPath = path.join(gameDir, "design", "pitch.md");
   await fs.mkdir(path.dirname(pitchPath), { recursive: true });
   await fs.writeFile(pitchPath, pitch, "utf8");
+}
+
+export async function saveStoryPlan(
+  slug: string,
+  storyPlan: string
+): Promise<void> {
+  const gameDir = await resolveGameDir(slug);
+  const planPath = path.join(gameDir, "design", "story-plan.md");
+  await fs.mkdir(path.dirname(planPath), { recursive: true });
+  await fs.writeFile(planPath, storyPlan, "utf8");
 }
 
 export async function saveWorld(
@@ -321,4 +337,50 @@ export async function applyProposalItems(
   }
 
   return { applied, skippedLocked };
+}
+
+export async function resetAndApplyPhaseProposal(
+  slug: string,
+  clearCollections: CollectionKind[],
+  clearFlags: boolean,
+  items: ProposalItem[]
+): Promise<{ applied: string[]; skippedLocked: string[]; removedCount: number }> {
+  const current = await loadGameDesign(slug);
+  let removedCount = 0;
+
+  for (const kind of clearCollections) {
+    const list = current[kind] as Array<{ id: string; locked?: boolean }>;
+    for (const entity of list) {
+      if (!entity.locked) {
+        await deleteEntity(slug, kind, entity.id);
+        removedCount++;
+      }
+    }
+  }
+
+  if (clearFlags) {
+    await saveFlags(slug, { flags: [] });
+  }
+
+  const res = await applyProposalItems(slug, items);
+
+  // Keep game.start_scene_id consistent with remaining/new scenes
+  const updated = await loadGameDesign(slug);
+  const sceneIds = new Set(updated.scenes.map((s) => s.id));
+  if (
+    updated.game.start_scene_id &&
+    !sceneIds.has(updated.game.start_scene_id)
+  ) {
+    await saveGameConfig(slug, {
+      ...updated.game,
+      start_scene_id: updated.scenes[0]?.id,
+    });
+  } else if (!updated.game.start_scene_id && updated.scenes[0]) {
+    await saveGameConfig(slug, {
+      ...updated.game,
+      start_scene_id: updated.scenes[0].id,
+    });
+  }
+
+  return { ...res, removedCount };
 }

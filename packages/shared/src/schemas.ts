@@ -52,15 +52,19 @@ export const GameConfigSchema = z.object({
   genre: z.string().default("point-and-click"),
   style: z.string().default("pixel-art"),
   target_resolution: z.string().default("640x360"),
+  target_engine: z.string().default("engine-pnc-2d"),
+  target_pipeline: z.string().default("pipeline-pnc-pixel"),
   start_scene_id: z.string().optional(),
 });
 export type GameConfig = z.infer<typeof GameConfigSchema>;
 
 export const ActSchema = z.object({
   id: KebabIdSchema,
+  locked: z.boolean().default(false),
   title: LocalizedTextSchema,
   summary: LocalizedTextSchema.default({}),
 });
+export type Act = z.infer<typeof ActSchema>;
 
 export const WorldBibleSchema = z.object({
   locked: z.boolean().default(false),
@@ -86,6 +90,7 @@ export type FlagsFile = z.infer<typeof FlagsFileSchema>;
 export const CharacterSchema = z.object({
   id: KebabIdSchema,
   locked: z.boolean().default(false),
+  acts: z.array(z.string()).default([]),
   name: LocalizedTextSchema,
   role: z.enum(["protagonist", "npc", "antagonist"]).default("npc"),
   bio: LocalizedTextSchema.default({}),
@@ -98,6 +103,7 @@ export type Character = z.infer<typeof CharacterSchema>;
 export const ItemSchema = z.object({
   id: KebabIdSchema,
   locked: z.boolean().default(false),
+  act: z.string().optional(),
   name: LocalizedTextSchema,
   description: LocalizedTextSchema.default({}),
   visual_brief: z.string().default(""),
@@ -142,7 +148,8 @@ export type Scene = z.infer<typeof SceneSchema>;
 export const PuzzleSchema = z.object({
   id: KebabIdSchema,
   locked: z.boolean().default(false),
-  scene_id: z.string(),
+  act: z.string().optional(),
+  scene_id: z.string().default(""),
   title: LocalizedTextSchema,
   summary: LocalizedTextSchema.default({}),
   requires: z.array(ConditionSchema).default([]),
@@ -187,6 +194,7 @@ export const GameDesignBundleSchema = z.object({
   slug: z.string(),
   game: GameConfigSchema,
   pitch: z.string(),
+  story_plan: z.string().default(""),
   world: WorldBibleSchema,
   flags: FlagsFileSchema,
   characters: z.array(CharacterSchema),

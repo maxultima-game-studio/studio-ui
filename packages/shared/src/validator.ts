@@ -270,7 +270,7 @@ export function validateGameDesign(bundle: GameDesignBundle): ValidationIssue[] 
   // Puzzles
   for (const puzzle of bundle.puzzles) {
     checkLocalizedText(issues, locales, puzzle.title, "title", "puzzle", puzzle.id);
-    if (!sceneIds.has(puzzle.scene_id)) {
+    if (puzzle.scene_id && !sceneIds.has(puzzle.scene_id)) {
       issues.push({
         id: `puzzle-scene-${puzzle.id}`,
         severity: "error",
