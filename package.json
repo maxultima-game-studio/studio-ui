@@ -1,0 +1,16 @@
+{
+  "name": "studio-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,magenta \"pnpm --filter @studio-ui/server dev\" \"pnpm --filter @studio-ui/web dev\"",
+    "build": "pnpm --filter @studio-ui/shared build && pnpm --filter @studio-ui/server build && pnpm --filter @studio-ui/web build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @studio-ui/shared test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.2"
+  }
+}
