@@ -5,3 +5,11 @@
 - **Hranice vůči `pipeline-*`:** `design/` drží jen vizuální briefy a deklarace asset slotů; `specs/` a `assets/` vlastní `pipeline-*`. `studio-ui` může stavy/náhledy číst a spouštět pipeline pouze přes rozhraní Pipeline Bridge.
 - **Human-in-the-loop AI:** AI nikdy nepřepisuje soubory na disku bez explicitního náhledu a schválení uživatelem; zamčené entity (`locked: true`) jsou chráněny proti přepsání.
 - **i18n od začátku:** UI aplikace i texty herního obsahu (včetně dialogů) podporují vícejazyčnost (`cs`, `en`).
+
+## Mandatory Always-On Skill
+- `project-documentation`: ALWAYS follow on every code, config, or behavior change — update `README.md` before finishing any task.
+
+## Project Skills (load on demand)
+- `project-workflow`: load when editing project files or resolving ambiguity (ask in Czech on ambiguity).
+- `git-commit`: load only when working with git (commits, branches, tags, PRs, release notes).
+- `skill-integration`: load only when adding or updating skills from an external rules repo.
