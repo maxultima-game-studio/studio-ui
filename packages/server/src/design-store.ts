@@ -339,12 +339,43 @@ export async function applyProposalItems(
   return { applied, skippedLocked };
 }
 
+function validateProposalItemData(item: ProposalItem): void {
+  switch (item.entity_type) {
+    case "world":
+      WorldBibleSchema.parse(item.data);
+      return;
+    case "flag":
+      FlagsFileSchema.parse({ flags: [item.data] });
+      return;
+    case "character":
+      CharacterSchema.parse(item.data);
+      return;
+    case "item":
+      ItemSchema.parse(item.data);
+      return;
+    case "scene":
+      SceneSchema.parse(item.data);
+      return;
+    case "puzzle":
+      PuzzleSchema.parse(item.data);
+      return;
+    case "dialogue":
+      DialogueSchema.parse(item.data);
+      return;
+  }
+}
+
 export async function resetAndApplyPhaseProposal(
   slug: string,
   clearCollections: CollectionKind[],
   clearFlags: boolean,
   items: ProposalItem[]
 ): Promise<{ applied: string[]; skippedLocked: string[]; removedCount: number }> {
+  // Validate every incoming item FIRST so a schema error never deletes existing data
+  for (const item of items) {
+    validateProposalItemData(item);
+  }
+
   const current = await loadGameDesign(slug);
   let removedCount = 0;
 

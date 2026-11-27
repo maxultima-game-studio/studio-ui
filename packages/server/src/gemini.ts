@@ -101,7 +101,6 @@ export async function planStoryActs(
   params: {
     currentPitch: string;
     currentPlan: string;
-    actCount: number;
     message: string;
     history: Array<{ role: "user" | "assistant"; text: string }>;
     locale: string;
@@ -111,16 +110,22 @@ export async function planStoryActs(
 ): Promise<{
   model: string;
   reply: string;
-  suggestedActCount: number;
+  suggestedActCount?: number;
   storyPlan: string;
 }> {
-  const systemPrompt = `You are a narrative producer helping a game designer plan how to expand a game pitch into structured Acts before generating Step 2.
-Have a focused, helpful planning conversation: recommend the right number of acts (1–6), pacing, key story beats per act, and scope.
+  const systemPrompt = `You are a prompt engineer and narrative producer helping a game designer craft a clear, high-leverage GENERATION BRIEF (prompt) that will later be used in Step 2 to expand the pitch into full Acts.
+IMPORTANT: Do NOT write out the actual story plot or detailed scene-by-scene beats of each act yet — that belongs to Step 2.
+Instead, turn the user's rough request into a crisp, well-structured Markdown prompt/brief specifying:
+- Scope & structure (recommended number of acts, target playtime, pacing)
+- Tone, atmosphere, and thematic focus
+- Narrative direction & constraints (twist style, ending type, what to emphasize or avoid)
+- Clear instructions for how Step 2 should structure the acts from the pitch.
+
 Return ONLY valid JSON:
 {
-  "reply": "Short, direct conversational response to the user's message (2–4 sentences)",
+  "reply": "Short conversational response (2–3 sentences) explaining how you refined the generation brief or asking 1 focused follow-up if helpful",
   "suggestedActCount": 3,
-  "storyPlan": "Updated clean Markdown planning brief describing the scope, number of acts, and bullet-point direction for each act (ready to guide Step 2 generation)"
+  "storyPlan": "The refined Markdown generation brief/prompt ready to feed into Step 2 (concise, structured with headings/bullets, no full plot writing yet)"
 }
 Write in language "${params.locale}".`;
 
@@ -133,15 +138,14 @@ Write in language "${params.locale}".`;
 Pitch:
 ${params.currentPitch}
 
-Current act count preference: ${params.actCount}
-Current story plan brief:
+Current generation brief:
 ${params.currentPlan || "(empty yet)"}
 
-Recent planning conversation:
+Recent conversation:
 ${historyText || "(first message)"}
 
-Latest user message:
-${params.message || "Navrhni optimální počet aktů a osnovu rozpracování této nosné myšlenky."}`;
+User's request / refinement:
+${params.message || "Vytvoř jasné a strukturované zadání (prompt) pro rozpracování této nosné myšlenky do aktů – včetně doporučeného počtu aktů, tempa, tónu a mantinelů."}`;
 
   const { data, model } = await callAiJson<{
     reply: string;
@@ -151,7 +155,7 @@ ${params.message || "Navrhni optimální počet aktů a osnovu rozpracování t�
     providerId: params.providerId,
     model: params.model,
     sessionId: `studio-ui-${bundle.slug}`,
-    action: "story:plan",
+    action: "story:plan-prompt",
     systemPrompt,
     userPrompt,
   });
@@ -161,8 +165,113 @@ ${params.message || "Navrhni optimální počet aktů a osnovu rozpracování t�
     model,
     reply: data.reply ?? "",
     suggestedActCount:
-      Number.isFinite(count) && count >= 1 && count <= 8 ? Math.round(count) : params.actCount,
+      Number.isFinite(count) && count >= 1 ? Math.round(count) : undefined,
     storyPlan: data.storyPlan ?? params.currentPlan,
+  };
+}
+
+function coerceString(val: unknown, preferredLocale = "cs"): string {
+  if (typeof val === "string") return val;
+  if (val && typeof val === "object" && !Array.isArray(val)) {
+    const rec = val as Record<string, unknown>;
+    const pick =
+      rec[preferredLocale] ?? rec.cs ?? rec.en ?? Object.values(rec)[0];
+    if (typeof pick === "string") return pick;
+  }
+  return val == null ? "" : String(val);
+}
+
+function coerceLocalizedText(
+  val: unknown,
+  defaultLocale: string
+): Record<string, string> {
+  if (typeof val === "string") return { [defaultLocale]: val };
+  if (val && typeof val === "object" && !Array.isArray(val)) {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      if (typeof v === "string") out[k] = v;
+    }
+    return out;
+  }
+  return {};
+}
+
+function coerceLocalizedList(
+  val: unknown,
+  defaultLocale: string
+): Record<string, string[]> {
+  if (Array.isArray(val)) {
+    return {
+      [defaultLocale]: val
+        .map((item) => coerceString(item, defaultLocale).trim())
+        .filter(Boolean),
+    };
+  }
+  if (val && typeof val === "object") {
+    const out: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      if (Array.isArray(v)) {
+        out[k] = v
+          .map((item) => coerceString(item, k).trim())
+          .filter(Boolean);
+      } else if (typeof v === "string" && v.trim()) {
+        out[k] = v
+          .split(/\r?\n/)
+          .map((s) => s.replace(/^[-*•]\s*/, "").trim())
+          .filter(Boolean);
+      }
+    }
+    return out;
+  }
+  return {};
+}
+
+function normalizeAct(raw: unknown, idx: number, defaultLocale: string): Act {
+  const act = (raw && typeof raw === "object" ? raw : {}) as Record<
+    string,
+    unknown
+  >;
+  const rawId = typeof act.id === "string" ? act.id : `act-${idx + 1}`;
+  const id =
+    rawId
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || `act-${idx + 1}`;
+  return {
+    id,
+    locked: Boolean(act.locked),
+    title:
+      Object.keys(coerceLocalizedText(act.title, defaultLocale)).length > 0
+        ? coerceLocalizedText(act.title, defaultLocale)
+        : { [defaultLocale]: `Akt ${idx + 1}` },
+    goal: coerceLocalizedText(act.goal, defaultLocale),
+    visual_style: coerceLocalizedText(act.visual_style, defaultLocale),
+    summary: coerceLocalizedText(act.summary, defaultLocale),
+    beats: coerceLocalizedList(act.beats, defaultLocale),
+    puzzle_concepts: coerceLocalizedList(act.puzzle_concepts, defaultLocale),
+    transition: coerceLocalizedText(act.transition, defaultLocale),
+  };
+}
+
+function normalizeWorldBible(
+  raw: unknown,
+  defaultLocale: string
+): WorldBible {
+  const w = (raw && typeof raw === "object" ? raw : {}) as Record<
+    string,
+    unknown
+  >;
+  const rawThemes = Array.isArray(w.themes) ? w.themes : [];
+  const rawActs = Array.isArray(w.acts) ? w.acts : [];
+
+  return {
+    locked: Boolean(w.locked),
+    setting: coerceLocalizedText(w.setting, defaultLocale),
+    visual_style: coerceString(w.visual_style, defaultLocale),
+    themes: rawThemes
+      .map((t) => coerceString(t, defaultLocale).trim())
+      .filter(Boolean),
+    acts: rawActs.map((a, idx) => normalizeAct(a, idx, defaultLocale)),
   };
 }
 
@@ -171,46 +280,58 @@ ${params.message || "Navrhni optimální počet aktů a osnovu rozpracování t�
  */
 export async function expandPitchToStory(
   bundle: GameDesignBundle,
-  target?: AiTarget & { actCount?: number; storyPlan?: string }
+  target?: AiTarget & { storyPlan?: string }
 ): Promise<{ model: string; summary: string; world: WorldBible }> {
   const locales = bundle.game.locales.join(", ");
-  const actCount = Math.min(8, Math.max(1, Number(target?.actCount ?? 3) || 3));
   const storyPlan = (target?.storyPlan ?? bundle.story_plan ?? "").trim();
 
   const systemPrompt = `You are a lead narrative designer for 2D point-and-click adventure games.
-Expand the pitch and planning brief into a complete, cohesive story from beginning to end split into EXACTLY ${actCount} rich, readable Acts.
+Expand the pitch and generation brief into a complete, cohesive story from beginning to end split into structured Acts.
+Follow the EXACT number of acts and constraints agreed in the Brief.
+Each act MUST have its own specific visual_style, goal, summary, beats, puzzle_concepts, and transition to the next act (or ending).
 Return ONLY valid JSON:
 {
-  "summary": "1-sentence overview of the full story arc",
+  "summary": "1-sentence plain string overview of the full story arc",
   "world": {
     "locked": false,
-    "setting": { "cs": "Rich 2-4 sentence description of world, atmosphere, and rules", "en": "..." },
-    "visual_style": "Detailed art direction and palette brief",
-    "themes": ["theme-1", "theme-2", "theme-3"],
+    "setting": { "cs": "...", "en": "..." },
+    "visual_style": "Short plain string baseline style",
+    "themes": ["theme-1", "theme-2"],
     "acts": [
       {
         "id": "act-1",
         "locked": false,
-        "title": { "cs": "Akt I: ...", "en": "Act I: ..." },
-        "summary": { "cs": "Detailed 4-6 sentence narrative beat sheet for this act: setup, key encounters, turning point, and cliffhanger/resolution.", "en": "..." }
+        "title": { "cs": "Akt 1: ...", "en": "Act 1: ..." },
+        "goal": { "cs": "Hlavní cíl hráče v tomto aktu...", "en": "Player's primary goal in this act..." },
+        "visual_style": { "cs": "Specifická paleta, osvětlení, nálada a vizuální motivy tohoto aktu...", "en": "Act-specific palette, lighting, mood, and visual motifs..." },
+        "summary": { "cs": "Krátké čtivé shrnutí děje aktu (2–3 věty).", "en": "Short readable summary (2-3 sentences)." },
+        "beats": {
+          "cs": ["Story beat 1...", "Story beat 2...", "Story beat 3..."],
+          "en": ["Story beat 1...", "Story beat 2...", "Story beat 3..."]
+        },
+        "puzzle_concepts": {
+          "cs": ["Koncept puzzlu 1...", "Koncept puzzlu 2..."],
+          "en": ["Puzzle concept 1...", "Puzzle concept 2..."]
+        },
+        "transition": { "cs": "Zvrat / přechod do dalšího aktu nebo vyústění...", "en": "Twist / transition to next act or finale..." }
       }
     ]
   }
 }
-You MUST generate exactly ${actCount} acts (act-1 .. act-${actCount}). All IDs MUST be lowercase kebab-case. Fill ALL locales: ${locales}.`;
+All IDs MUST be lowercase kebab-case (act-1, act-2, ...). Fill ALL locales (${locales}) for localized fields.`;
 
   const userPrompt = `Game settings: ${JSON.stringify(bundle.game)}
 Pitch:
 ${bundle.pitch}
 
-Approved Story Plan & Scope (follow this closely):
-${storyPlan || `Create ${actCount} balanced, cohesive acts from opening to finale.`}
+Approved Generation Brief (follow act count, tone, constraints, and scope closely):
+${storyPlan || "Choose the most natural multi-act structure from opening to finale."}
 
-Generate the full World and all ${actCount} Acts.`;
+Generate all structured Acts from beginning to end.`;
 
   const { data, model } = await callAiJson<{
-    summary: string;
-    world: WorldBible;
+    summary: unknown;
+    world: unknown;
   }>({
     providerId: target?.providerId,
     model: target?.model,
@@ -222,8 +343,10 @@ Generate the full World and all ${actCount} Acts.`;
 
   return {
     model,
-    summary: data.summary ?? "Story arc generated",
-    world: data.world,
+    summary:
+      coerceString(data.summary, bundle.game.default_locale) ||
+      "Story arc generated",
+    world: normalizeWorldBible(data.world, bundle.game.default_locale),
   };
 }
 
@@ -240,10 +363,11 @@ export async function refineSingleAct(
   }
 ): Promise<{ model: string; act: Act; rationale: string }> {
   const locales = bundle.game.locales.join(", ");
-  const targetAct = bundle.world.acts.find((a) => a.id === params.actId);
+  const actIndex = bundle.world.acts.findIndex((a) => a.id === params.actId);
+  const targetAct = actIndex >= 0 ? bundle.world.acts[actIndex] : undefined;
   if (!targetAct) throw new Error(`Act "${params.actId}" not found`);
 
-  const systemPrompt = `You are a lead narrative designer refining one act of a point-and-click adventure story while keeping strict continuity with the pitch and all other acts.
+  const systemPrompt = `You are a lead narrative designer refining one structured Act of a point-and-click adventure story while keeping strict continuity with the pitch and all other acts.
 Return ONLY valid JSON:
 {
   "rationale": "1-2 short sentences explaining the changes",
@@ -251,7 +375,12 @@ Return ONLY valid JSON:
     "id": "${params.actId}",
     "locked": ${Boolean(targetAct.locked)},
     "title": { "cs": "...", "en": "..." },
-    "summary": { "cs": "Rich 4-6 sentence act story...", "en": "..." }
+    "goal": { "cs": "...", "en": "..." },
+    "visual_style": { "cs": "...", "en": "..." },
+    "summary": { "cs": "...", "en": "..." },
+    "beats": { "cs": ["..."], "en": ["..."] },
+    "puzzle_concepts": { "cs": ["..."], "en": ["..."] },
+    "transition": { "cs": "...", "en": "..." }
   }
 }
 Keep ID "${params.actId}" unchanged. Fill ALL locales: ${locales}.`;
@@ -264,11 +393,11 @@ ${JSON.stringify(bundle.world.acts, null, 2)}
 
 Target act to refine: ${params.actId}
 User instruction:
-${params.instruction || "Deepen the pacing, mystery, and emotional hook while keeping continuity with neighboring acts."}`;
+${params.instruction || "Deepen the pacing, visual atmosphere, story beats, and puzzle concepts while keeping continuity with neighboring acts."}`;
 
   const { data, model } = await callAiJson<{
-    rationale: string;
-    act: Act;
+    rationale: unknown;
+    act: unknown;
   }>({
     providerId: params.providerId,
     model: params.model,
@@ -278,10 +407,15 @@ ${params.instruction || "Deepen the pacing, mystery, and emotional hook while ke
     userPrompt,
   });
 
+  const normalized = normalizeAct(
+    data.act,
+    actIndex,
+    bundle.game.default_locale
+  );
   return {
     model,
-    act: { ...data.act, id: params.actId },
-    rationale: data.rationale ?? "",
+    act: { ...normalized, id: params.actId },
+    rationale: coerceString(data.rationale, bundle.game.default_locale),
   };
 }
 

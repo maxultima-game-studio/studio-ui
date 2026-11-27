@@ -221,7 +221,6 @@ app.post("/api/games/:slug/ai/jobs", (req, res) => {
         const res = await planStoryActs(bundle, {
           currentPitch: String(payload.currentPitch ?? bundle.pitch),
           currentPlan: String(payload.currentPlan ?? bundle.story_plan),
-          actCount: Number(payload.actCount ?? 3) || 3,
           message: String(payload.message ?? ""),
           history: Array.isArray(payload.history)
             ? (payload.history as Array<{ role: "user" | "assistant"; text: string }>)
@@ -233,7 +232,6 @@ app.post("/api/games/:slug/ai/jobs", (req, res) => {
         return res;
       }
       case "expand-story": {
-        const actCount = Number(payload.actCount ?? 3) || 3;
         const storyPlan =
           typeof payload.storyPlan === "string"
             ? payload.storyPlan
@@ -243,7 +241,6 @@ app.post("/api/games/:slug/ai/jobs", (req, res) => {
         }
         const res = await expandPitchToStory(bundle, {
           ...target,
-          actCount,
           storyPlan,
         });
         const applied = await resetAndApplyPhaseProposal(

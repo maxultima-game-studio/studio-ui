@@ -265,7 +265,6 @@ export const api = {
     payload: {
       currentPitch: string;
       currentPlan: string;
-      actCount: number;
       message: string;
       history: Array<{ role: "user" | "assistant"; text: string }>;
       locale: string;
@@ -277,7 +276,7 @@ export const api = {
     runAiJob<{
       model: string;
       reply: string;
-      suggestedActCount: number;
+      suggestedActCount?: number;
       storyPlan: string;
     }>(slug, "plan-story", payload, onTick),
   aiExpandStory: (
@@ -285,7 +284,6 @@ export const api = {
     payload?: {
       providerId?: string;
       model?: string;
-      actCount?: number;
       storyPlan?: string;
     },
     onTick?: () => void

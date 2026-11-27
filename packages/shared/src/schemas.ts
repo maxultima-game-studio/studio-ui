@@ -58,11 +58,18 @@ export const GameConfigSchema = z.object({
 });
 export type GameConfig = z.infer<typeof GameConfigSchema>;
 
+export const LocalizedStringListSchema = z.record(z.string(), z.array(z.string()));
+
 export const ActSchema = z.object({
   id: KebabIdSchema,
   locked: z.boolean().default(false),
   title: LocalizedTextSchema,
+  goal: LocalizedTextSchema.default({}),
+  visual_style: LocalizedTextSchema.default({}),
   summary: LocalizedTextSchema.default({}),
+  beats: LocalizedStringListSchema.default({}),
+  puzzle_concepts: LocalizedStringListSchema.default({}),
+  transition: LocalizedTextSchema.default({}),
 });
 export type Act = z.infer<typeof ActSchema>;
 

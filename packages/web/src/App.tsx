@@ -149,7 +149,7 @@ export function App() {
   const [aiLogs, setAiLogs] = useState<AiLogEntry[]>([]);
   const [aiBusy, setAiBusy] = useState(false);
   const [confirmAction, setConfirmAction] = useState<
-    | { kind: "expand-story"; actCount: number; storyPlan: string }
+    | { kind: "expand-story"; storyPlan: string }
     | { kind: "generate-structure" }
     | null
   >(null);
@@ -404,7 +404,6 @@ export function App() {
   const handleAiPlanStory = async (params: {
     currentPitch: string;
     currentPlan: string;
-    actCount: number;
     message: string;
     history: Array<{ role: "user" | "assistant"; text: string }>;
   }) => {
@@ -430,10 +429,7 @@ export function App() {
     }
   };
 
-  const executeAiExpandStory = async (params: {
-    actCount: number;
-    storyPlan: string;
-  }) => {
+  const executeAiExpandStory = async (params: { storyPlan: string }) => {
     setConfirmAction(null);
     setAiBusy(true);
     try {
@@ -448,8 +444,8 @@ export function App() {
       setTab("story");
       notify(
         uiLocale === "cs"
-          ? `Příběh rozpracován do ${params.actCount} aktů (${res.model}).`
-          : `Story expanded into ${params.actCount} acts (${res.model}).`,
+          ? `Příběh & akty vygenerovány podle plánu (${res.model}).`
+          : `Story & acts generated from plan (${res.model}).`,
         "success"
       );
     } catch (e) {
@@ -578,9 +574,9 @@ export function App() {
   const warningCount = issues.filter((i) => i.severity === "warning").length;
 
   return (
-    <div className="min-h-screen bg-[#f8f9fb] pb-10 text-zinc-900 transition-colors dark:bg-[#0d0f12] dark:text-zinc-100">
-      {/* Antigravity Top Bar */}
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-zinc-200/80 bg-white/90 px-4 backdrop-blur-md dark:border-zinc-800/80 dark:bg-[#15181e]/90">
+    <div className="min-h-screen bg-[#f8f9fb] pb-10 pt-14 text-zinc-900 transition-colors dark:bg-[#0d0f12] dark:text-zinc-100">
+      {/* Antigravity Fixed Top Bar */}
+      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-zinc-200/80 bg-white/95 px-4 backdrop-blur-md dark:border-zinc-800/80 dark:bg-[#15181e]/95">
         <div className="flex items-center gap-2.5 overflow-x-auto">
           <div className="flex shrink-0 items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
@@ -815,8 +811,8 @@ export function App() {
         title={
           confirmAction?.kind === "expand-story"
             ? uiLocale === "cs"
-              ? `Rozpracovat pitch do ${confirmAction.actCount} aktů?`
-              : `Expand pitch into ${confirmAction.actCount} acts?`
+              ? "Rozpracovat pitch do příběhu a aktů?"
+              : "Expand pitch into story & acts?"
             : uiLocale === "cs"
             ? "Vygenerovat novou strukturu lokací a dialogů?"
             : "Generate new scenes, puzzles, and dialogues?"
@@ -824,8 +820,8 @@ export function App() {
         description={
           confirmAction?.kind === "expand-story"
             ? uiLocale === "cs"
-              ? `Spuštěním AI rozpracování se podle tvého plánu vygeneruje ucelený příběh v ${confirmAction.actCount} aktech (Krok 2) a vymažou se předchozí nezamčené entity z Kroků 3 a 4A/4B. Zamčené entity (locked) zůstanou zachovány. Po dokončení se rovnou přepne na Krok 2.`
-              : `Running AI expansion will generate a cohesive ${confirmAction.actCount}-act story (Step 2) following your plan and clear previous unlocked entities in Steps 3 and 4A/4B. Locked entities are preserved. You will be taken directly to Step 2.`
+              ? "Spuštěním AI rozpracování se podle tvého plánu vygeneruje ucelený příběh rozdělený do aktů (Krok 2) a vymažou se předchozí nezamčené entity z Kroků 3 a 4A/4B. Zamčené entity (locked) zůstanou zachovány. Po dokončení se rovnou přepne na Krok 2."
+              : "Running AI expansion will generate a cohesive multi-act story (Step 2) following your plan and clear previous unlocked entities in Steps 3 and 4A/4B. Locked entities are preserved. You will be taken directly to Step 2."
             : uiLocale === "cs"
             ? "Spuštěním generování se vymažou předchozí nezamčené Lokace (4A), Puzzly a Dialogy (4B) a vygenerují se nové podle definovaných aktů a entit. Zamčené entity zůstanou zachovány."
             : "Generating structure will replace unlocked Scenes (4A), Puzzles, and Dialogues (4B) based on your acts and entities. Locked entities are preserved."
@@ -837,7 +833,6 @@ export function App() {
         onConfirm={() => {
           if (confirmAction?.kind === "expand-story") {
             void executeAiExpandStory({
-              actCount: confirmAction.actCount,
               storyPlan: confirmAction.storyPlan,
             });
           } else if (confirmAction?.kind === "generate-structure") {
